@@ -49,6 +49,8 @@ enum DISPLAY_SM {
 #define EEPROM_SIZE     2     //2 bytes for validity check
 #define BATTERY_CAP     7200.0  //120mAh = 7200 mAmin
 #define CURRCONS        25.0    //25mA in state BITEWATCH
+#define MAXVALIDDIST    8189    //Maximal valid value ftor ToF sensor
+
 
 //Global variables
 float voltages[ARRAY_SIZE] = {3.27, 3.61, 3.69, 3.71, 3.73, 3.75, 3.77, 3.79, 3.8, 3.82, 3.84, 3.85, 3.87, 3.91, 3.95, 3.98, 4.02, 4.08, 4.11, 4.15, 4.2};
@@ -409,7 +411,18 @@ void loop() {
           tft.drawXBitmap(0, 0, fish_bits, fish_width, fish_height, TFT_WHITE);
           firstBite = false;
         }
+        distance = sensor.readRangeSingleMillimeters();
+        if (distance > MAXVALIDDIST)
+        {
+          displayBox = FINISH;
+        }
         break;
       }
+    case FINISH:
+      {
+        axp192.powerOff();
+        break;
+      }
+      
   }
 }
