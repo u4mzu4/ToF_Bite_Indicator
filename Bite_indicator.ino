@@ -20,7 +20,7 @@ enum DISPLAY_SM {
   BITEWATCH   = 3,
   ALARM       = 4,
   FINISH      = 5,
-  RSRVD       = 9
+  RESERVED    = 9
 };
 
 //Defines
@@ -47,14 +47,16 @@ enum DISPLAY_SM {
 #define TFT_VOLT        3000  //3V for TFT driver IC
 #define FREQ_CHANGE     500   //2Hz
 #define EEPROM_SIZE     2     //2 bytes for validity check
-#define BATTERY_CAP     7200.0  //120mAh = 7200 mAmin
-#define CURRCONS        25.0    //25mA in state BITEWATCH
-#define MAXVALIDDIST    8189    //Maximal valid value ftor ToF sensor
+#define BATTERY_CAP     7200.0  //120 mAh = 7200 mAmin
+#define CURRCONS        68.0    //68mA in state BITEWATCH
+#define MAXVALIDDIST    8189    //Maximal valid value for ToF sensor
 
 
 //Global variables
 float voltages[ARRAY_SIZE] = {3.27, 3.61, 3.69, 3.71, 3.73, 3.75, 3.77, 3.79, 3.8, 3.82, 3.84, 3.85, 3.87, 3.91, 3.95, 3.98, 4.02, 4.08, 4.11, 4.15, 4.2};
 float percentages[ARRAY_SIZE] = {0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0};
+bool button_A_Pressed = false;
+bool button_B_Pressed = false;
 
 
 //Init services
@@ -87,7 +89,7 @@ void DrawMainPage(int actualDistance, int actualPercent, bool distanceColor, int
     {
       tft.setTextColor(TFT_RED, TFT_BLACK);
     }
-    tft.drawString(String(actualDistance) + " mm", 20, 40);
+    tft.drawString(String(actualDistance) + " mm", 20, 50);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.unloadFont();
     tft.unloadFont();
@@ -98,7 +100,7 @@ void DrawMainPage(int actualDistance, int actualPercent, bool distanceColor, int
 int DrawSettings()
 {
   static int setValue = 20;
-  int readoutValue;
+  static int readoutValue;
   static bool newPageNeeded = true;
   static bool readoutNeeded = true;
 
@@ -142,7 +144,7 @@ int DrawSettings()
     newPageNeeded = false;
   }
 
-  if (!digitalRead(BUTTON_A_PIN))
+  if (button_B_Pressed)
   {
     setValue += 10;
     if (setValue > 50)
@@ -150,10 +152,15 @@ int DrawSettings()
       setValue = 20;
     }
     newPageNeeded = true;
+    button_B_Pressed = false;
   }
-  if (!digitalRead(BUTTON_B_PIN))
+  if (button_A_Pressed)
   {
-    EEPROMHandler(1, setValue);
+    if (setValue != readoutValue)
+    {
+      EEPROMHandler(1, setValue);
+    }
+    button_A_Pressed = false;
     return (setValue);
   }
   else
@@ -272,10 +279,18 @@ int EstimateRemTime (int batteryStatus)
 {
   int estRemTime;
   float actualCapacity;
-  
+
   actualCapacity = (float)(batteryStatus) * 0.01 * BATTERY_CAP;
-  estRemTime = round(actualCapacity/CURRCONS);
+  estRemTime = round(actualCapacity / CURRCONS);
   return estRemTime;
+}
+
+void IRAM_ATTR IsrA() {
+  button_A_Pressed = true;
+}
+
+void IRAM_ATTR IsrB() {
+  button_B_Pressed = true;
 }
 
 
@@ -285,9 +300,9 @@ void setup() {
   pinMode(BUTTON_B_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);
+  attachInterrupt(BUTTON_A_PIN, IsrA, FALLING);
+  attachInterrupt(BUTTON_B_PIN, IsrB, FALLING);
   setCpuFrequencyMhz(CPU_LOW_FREQ);
-  delay(100);
-  Serial.begin(115200);
   delay(100);
   btStop();
   delay(100);
@@ -330,12 +345,10 @@ void loop() {
   int distance;
   static int setupDistance;
   float batteryVoltage;
-  float currentConsumption;
   int batteryP;
   int remainingTime;
   static DISPLAY_SM displayBox = INIT;
   bool inRange;
-  static int brightness = BRIGHTHNESS;
   static bool firstRun = true;
   static int settledDistance;
   static bool isBiteIndicated = false;
@@ -371,10 +384,11 @@ void loop() {
         batteryP = BatteryPercent(batteryVoltage);
         remainingTime = EstimateRemTime(batteryP);
         DrawMainPage(distance, batteryP, inRange, remainingTime);
-        if (!digitalRead(BUTTON_A_PIN) && inRange)
+        if (button_A_Pressed && inRange)
         {
           settledDistance = distance;
           displayBox = BITEWATCH;
+          button_A_Pressed = false;
         }
         else
         {
@@ -412,6 +426,15 @@ void loop() {
           firstBite = false;
         }
         distance = sensor.readRangeSingleMillimeters();
+        if (abs(distance - settledDistance) < setupDistance)
+        {
+          ledcWrite(PWM_CHANNEL, 0);
+          digitalWrite(LED_PIN, HIGH);
+          axp192.setLDO2(0);
+          axp192.setLDO3(0);
+          firstBite = true;
+          displayBox = BITEWATCH;
+        }
         if (distance > MAXVALIDDIST)
         {
           displayBox = FINISH;
@@ -423,6 +446,6 @@ void loop() {
         axp192.powerOff();
         break;
       }
-      
+
   }
 }
