@@ -423,9 +423,6 @@ void loop() {
           axp192.setLDO2(0);
           axp192.setLDO3(0);
           sensor.setTimeout(500);
-          /* #ifdef VL53L0X_h
-                    sensor.startContinuous();
-            #endif */
           firstRun = false;
         }
         distance = sensor.readRangeSingleMillimeters();
