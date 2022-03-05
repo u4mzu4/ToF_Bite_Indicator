@@ -10,6 +10,7 @@
 #include <SPIFFS.h>
 #include <TFT_eSPI.h>
 #include <VL53L0X.h>
+//#include <VL6180X.h>
 #include <WiFi.h>
 
 //Enum
@@ -49,7 +50,12 @@ enum DISPLAY_SM {
 #define EEPROM_SIZE     2     //2 bytes for validity check
 #define BATTERY_CAP     7200.0  //120 mAh = 7200 mAmin
 #define CURRCONS        68.0    //68mA in state BITEWATCH
+#ifdef VL53L0X_h
 #define MAXVALIDDIST    8189    //Maximal valid value for ToF sensor
+#endif
+#ifdef VL6180X_h
+#define MAXVALIDDIST    254    //Maximal valid value for ToF sensor
+#endif
 
 
 //Global variables
@@ -62,7 +68,12 @@ bool button_B_Pressed = false;
 //Init services
 I2C_AXP192 axp192(I2C_AXP192_DEFAULT_ADDRESS, Wire1);
 TFT_eSPI tft = TFT_eSPI();
+#ifdef VL53L0X_h
 VL53L0X sensor;
+#endif
+#ifdef VL6180X_h
+VL6180X sensor;
+#endif
 
 //Functions
 void DrawMainPage(int actualDistance, int actualPercent, bool distanceColor, int actRemTime)
@@ -328,9 +339,18 @@ void setup() {
   };
   axp192.begin(initDef);
   delay(100);
+#ifdef VL53L0X_h
   Wire.begin(I2C_SDA_PIN2, I2C_SCL_PIN2);
+#endif
+#ifdef VL6180X_h
+  Wire.begin(I2C_SDA_PIN3, I2C_SCL_PIN3);
+#endif
   delay(100);
   sensor.init();
+  delay(100);
+#ifdef VL6180X_h
+  sensor.configureDefault();
+#endif
   delay(100);
   SPIFFS.begin();
   delay(100);
@@ -403,7 +423,9 @@ void loop() {
           axp192.setLDO2(0);
           axp192.setLDO3(0);
           sensor.setTimeout(500);
-          sensor.startContinuous();
+          /* #ifdef VL53L0X_h
+                    sensor.startContinuous();
+            #endif */
           firstRun = false;
         }
         distance = sensor.readRangeSingleMillimeters();
